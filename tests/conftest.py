@@ -18,6 +18,16 @@ def mock_api() -> respx.MockRouter:
         yield router
 
 
+@pytest.fixture()
+def mock_supabase() -> respx.MockRouter:
+    """Return a respx mock router scoped to the Supabase Auth URL."""
+    with respx.mock(
+        base_url="https://cbtzdoasmkbbiwnyoxvz.supabase.co/auth/v1",
+        assert_all_called=False,
+    ) as router:
+        yield router
+
+
 def make_search_response(
     jellies: list[dict[str, Any]] | None = None,
     total: int | None = None,
@@ -127,5 +137,70 @@ def make_jelly_detail(
             "comments_count": 7,
             "all_views": 1500,
             "tips_total": 3.5,
+        },
+    }
+
+
+def make_comments_response(
+    comments: list[dict[str, Any]] | None = None,
+    total: int | None = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> dict[str, Any]:
+    """Build a realistic comments response payload."""
+    if comments is None:
+        comments = [make_comment()]
+    return {
+        "comments": comments,
+        "total": total if total is not None else len(comments),
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+def make_comment(
+    comment_id: str = "comment-001",
+    user_id: str = "user-001",
+    username: str = "rick",
+    text: str = "Great jelly!",
+) -> dict[str, Any]:
+    """Build a realistic comment payload."""
+    return {
+        "id": comment_id,
+        "user_id": user_id,
+        "username": username,
+        "text": text,
+        "created_at": "2026-03-01T10:00:00Z",
+    }
+
+
+def make_likes_response(
+    likes: list[str] | None = None,
+    total: int | None = None,
+) -> dict[str, Any]:
+    """Build a realistic likes response payload."""
+    if likes is None:
+        likes = ["user-001", "user-002"]
+    return {
+        "likes": likes,
+        "total": total if total is not None else len(likes),
+    }
+
+
+def make_auth_response(
+    access_token: str = "test-access-token",
+    refresh_token: str = "test-refresh-token",
+    expires_at: int = 1735689600,
+    user_id: str = "user-001",
+) -> dict[str, Any]:
+    """Build a realistic Supabase auth response."""
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": expires_at,
+        "token_type": "bearer",
+        "user": {
+            "id": user_id,
+            "email": "rick@wayyresearch.com",
         },
     }

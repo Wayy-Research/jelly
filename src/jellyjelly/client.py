@@ -9,7 +9,12 @@ from typing import Any
 
 import httpx
 
-from jellyjelly.models import JellyDetail, SearchResponse
+from jellyjelly.models import (
+    CommentsResponse,
+    JellyDetail,
+    LikesResponse,
+    SearchResponse,
+)
 
 BASE_URL = "https://api.jellyjelly.com"
 
@@ -31,13 +36,18 @@ class JellyAPIError(Exception):
 
 
 class JellyClient:
-    """Async client for the JellyJelly public API.
+    """Async client for the JellyJelly API.
 
     Usage::
 
         async with JellyClient() as client:
             results = await client.search("fintech")
             detail = await client.get_jelly(results.jellies[0].id)
+
+    Authenticated usage::
+
+        async with JellyClient(token="your-jwt") as client:
+            comments = await client.get_comments("jelly-id")
     """
 
     def __init__(
@@ -46,10 +56,12 @@ class JellyClient:
         timeout: float = 30.0,
         max_retries: int = MAX_RETRIES,
         retry_backoff_base: float = RETRY_BACKOFF_BASE,
+        token: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._max_retries = max_retries
         self._retry_backoff_base = retry_backoff_base
+        self._token: str | None = token
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
@@ -71,9 +83,34 @@ class JellyClient:
         """Close the underlying httpx client."""
         await self._client.aclose()
 
+    @property
+    def authenticated(self) -> bool:
+        """Return True if a bearer token is set."""
+        return self._token is not None
+
+    def set_token(self, token: str) -> None:
+        """Set the bearer token for authenticated requests."""
+        self._token = token
+
+    def clear_token(self) -> None:
+        """Remove the bearer token."""
+        self._token = None
+
+    def _require_auth(self) -> None:
+        """Raise if no token is set."""
+        if not self._token:
+            raise JellyAPIError(401, "Authentication required")
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """Make a request with retry and exponential backoff."""
         last_exc: Exception | None = None
+
+        # Inject auth header if token is set
+        headers: dict[str, str] = kwargs.pop("headers", {})
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+        if headers:
+            kwargs["headers"] = headers
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -113,6 +150,12 @@ class JellyClient:
         query: str,
         page: int = 1,
         page_size: int = 10,
+        *,
+        username: str | None = None,
+        sort_by: str | None = None,
+        ascending: bool | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> SearchResponse:
         """Search jellies by keyword.
 
@@ -120,6 +163,11 @@ class JellyClient:
             query: Search term.
             page: Page number (1-indexed).
             page_size: Results per page (max 100).
+            username: Filter by creator username.
+            sort_by: Sort field (e.g. "likes", "views", "date").
+            ascending: Sort direction (True for ascending).
+            start_date: Filter jellies posted on or after this date.
+            end_date: Filter jellies posted on or before this date.
 
         Returns:
             Parsed search response with list of jellies.
@@ -128,11 +176,23 @@ class JellyClient:
             raise ValueError(f"page must be >= 1, got {page}")
         if page_size < 1 or page_size > 100:
             raise ValueError(f"page_size must be 1-100, got {page_size}")
-        data = await self._request(
-            "GET",
-            "/v3/jelly/search",
-            params={"q": query, "page": page, "page_size": page_size},
-        )
+        params: dict[str, Any] = {
+            "q": query,
+            "page": page,
+            "page_size": page_size,
+        }
+        if username is not None:
+            params["username"] = username
+        if sort_by is not None:
+            params["sort_by"] = sort_by
+        if ascending is not None:
+            params["ascending"] = str(ascending).lower()
+        if start_date is not None:
+            params["start_date"] = start_date
+        if end_date is not None:
+            params["end_date"] = end_date
+
+        data = await self._request("GET", "/v3/jelly/search", params=params)
         return SearchResponse.model_validate(data)
 
     async def get_jelly(self, jelly_id: str) -> JellyDetail:
@@ -153,3 +213,84 @@ class JellyClient:
         # Detail response wraps the jelly in {"status": ..., "jelly": {...}}
         jelly_data: Any = data.get("jelly", data) if isinstance(data, dict) else data
         return JellyDetail.model_validate(jelly_data)
+
+    async def get_comments(
+        self,
+        jelly_id: str,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> CommentsResponse:
+        """Get comments on a jelly (requires authentication).
+
+        Args:
+            jelly_id: The jelly's unique ID.
+            page: Page number (1-indexed).
+            page_size: Results per page.
+
+        Returns:
+            CommentsResponse with list of comments.
+        """
+        self._require_auth()
+        if not _JELLY_ID_RE.match(jelly_id):
+            raise ValueError(f"Invalid jelly_id: {jelly_id!r}")
+        data = await self._request(
+            "GET",
+            f"/v3/jelly/{jelly_id}/comments",
+            params={"page": page, "page_size": page_size},
+        )
+        return CommentsResponse.model_validate(data)
+
+    async def get_likes(self, jelly_id: str) -> LikesResponse:
+        """Get likes on a jelly (requires authentication).
+
+        Args:
+            jelly_id: The jelly's unique ID.
+
+        Returns:
+            LikesResponse with list of user IDs who liked.
+        """
+        self._require_auth()
+        if not _JELLY_ID_RE.match(jelly_id):
+            raise ValueError(f"Invalid jelly_id: {jelly_id!r}")
+        data = await self._request("GET", f"/v3/jelly/{jelly_id}/likes")
+        return LikesResponse.model_validate(data)
+
+    async def comment(self, jelly_id: str, text: str) -> dict[str, Any]:
+        """Post a comment on a jelly (requires authentication).
+
+        Args:
+            jelly_id: The jelly's unique ID.
+            text: Comment text.
+
+        Returns:
+            Raw API response dict.
+        """
+        self._require_auth()
+        if not _JELLY_ID_RE.match(jelly_id):
+            raise ValueError(f"Invalid jelly_id: {jelly_id!r}")
+        if not text.strip():
+            raise ValueError("Comment text must not be empty")
+        result: dict[str, Any] = await self._request(
+            "POST",
+            f"/v3/jelly/{jelly_id}/comment",
+            json={"text": text},
+        )
+        return result
+
+    async def like(self, jelly_id: str) -> dict[str, Any]:
+        """Like a jelly (requires authentication).
+
+        Args:
+            jelly_id: The jelly's unique ID.
+
+        Returns:
+            Raw API response dict.
+        """
+        self._require_auth()
+        if not _JELLY_ID_RE.match(jelly_id):
+            raise ValueError(f"Invalid jelly_id: {jelly_id!r}")
+        result: dict[str, Any] = await self._request(
+            "POST",
+            f"/v3/jelly/{jelly_id}/like",
+        )
+        return result

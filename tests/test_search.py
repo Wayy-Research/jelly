@@ -6,7 +6,14 @@ import httpx
 import respx
 
 from jellyjelly.client import JellyClient
-from jellyjelly.search import by_creator, by_topic, search_all_pages, trending
+from jellyjelly.search import (
+    by_creator,
+    by_date_range,
+    by_topic,
+    search_all_pages,
+    top_liked,
+    trending,
+)
 
 from .conftest import make_jelly_summary, make_search_response
 
@@ -30,22 +37,24 @@ class TestTrending:
 
 
 class TestByCreator:
-    async def test_filters_by_username(self, mock_api: respx.MockRouter) -> None:
-        mock_api.get("/v3/jelly/search").mock(
+    async def test_uses_username_param(self, mock_api: respx.MockRouter) -> None:
+        route = mock_api.get("/v3/jelly/search").mock(
             return_value=httpx.Response(
                 200,
                 json=make_search_response(
                     jellies=[
                         make_jelly_summary(jelly_id="j1", username="rick"),
-                        make_jelly_summary(jelly_id="j2", username="other"),
+                        make_jelly_summary(jelly_id="j2", username="rick"),
                     ]
                 ),
             )
         )
         async with JellyClient() as client:
             results = await by_creator(client, "rick")
-        assert len(results) == 1
-        assert results[0].id == "j1"
+        assert len(results) == 2
+        # Verify the username param was sent server-side
+        request = route.calls[0].request
+        assert b"username=rick" in request.url.raw_path
 
 
 class TestByTopic:
@@ -59,6 +68,55 @@ class TestByTopic:
         async with JellyClient() as client:
             results = await by_topic(client, "quant")
         assert len(results) == 1
+
+
+class TestByDateRange:
+    async def test_passes_date_params(self, mock_api: respx.MockRouter) -> None:
+        route = mock_api.get("/v3/jelly/search").mock(
+            return_value=httpx.Response(
+                200,
+                json=make_search_response(jellies=[make_jelly_summary()]),
+            )
+        )
+        async with JellyClient() as client:
+            results = await by_date_range(client, "2026-01-01", "2026-03-01")
+        assert len(results) == 1
+        request = route.calls[0].request
+        assert b"start_date=2026-01-01" in request.url.raw_path
+        assert b"end_date=2026-03-01" in request.url.raw_path
+
+    async def test_with_query(self, mock_api: respx.MockRouter) -> None:
+        route = mock_api.get("/v3/jelly/search").mock(
+            return_value=httpx.Response(
+                200,
+                json=make_search_response(jellies=[make_jelly_summary()]),
+            )
+        )
+        async with JellyClient() as client:
+            await by_date_range(client, "2026-01-01", "2026-03-01", query="fintech")
+        request = route.calls[0].request
+        assert b"q=fintech" in request.url.raw_path
+
+
+class TestTopLiked:
+    async def test_sorts_by_likes(self, mock_api: respx.MockRouter) -> None:
+        route = mock_api.get("/v3/jelly/search").mock(
+            return_value=httpx.Response(
+                200,
+                json=make_search_response(
+                    jellies=[
+                        make_jelly_summary(jelly_id="j1"),
+                        make_jelly_summary(jelly_id="j2"),
+                    ]
+                ),
+            )
+        )
+        async with JellyClient() as client:
+            results = await top_liked(client)
+        assert len(results) == 2
+        request = route.calls[0].request
+        assert b"sort_by=likes" in request.url.raw_path
+        assert b"ascending=false" in request.url.raw_path
 
 
 class TestSearchAllPages:

@@ -59,6 +59,41 @@ class TranscriptOverlay(BaseModel):
     results: TranscriptResults | None = None
 
 
+class AuthSession(BaseModel):
+    """Supabase auth session tokens."""
+
+    access_token: str
+    refresh_token: str
+    expires_at: int = 0
+    user_id: str = ""
+
+
+class Comment(BaseModel):
+    """A comment on a jelly."""
+
+    id: str
+    user_id: str = ""
+    username: str = ""
+    text: str = ""
+    created_at: datetime | None = None
+
+
+class CommentsResponse(BaseModel):
+    """Response from the comments endpoint."""
+
+    comments: list[Comment] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 10
+
+
+class LikesResponse(BaseModel):
+    """Response from the likes endpoint."""
+
+    likes: list[str] = Field(default_factory=list)
+    total: int = 0
+
+
 class Jelly(BaseModel):
     """A jelly from search results (summary-level data).
 
@@ -92,6 +127,18 @@ class JellyDetail(BaseModel):
     comments_count: int = 0
     all_views: int = 0
     tips_total: float = 0.0
+    # Extended fields from API probing
+    access: str | None = None
+    distinct_views: int = 0
+    anon_views: int = 0
+    price: float | None = None
+    pay_to_watch: bool = False
+    allow_preview: bool = True
+    has_poll: bool = False
+    has_event: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    deleted_at: datetime | None = None
 
     @property
     def transcript_text(self) -> str:

@@ -17,19 +17,61 @@ async def by_creator(
 ) -> list[Jelly]:
     """Search for jellies by a specific creator's username.
 
-    Uses keyword search and client-side filtering. Results may be
-    incomplete if the API does not index usernames or if the creator's
-    jellies span multiple pages.
+    Uses the server-side ``username`` filter parameter for accurate results.
     """
-    resp = await client.search(username, page_size=page_size)
-    return [
-        j for j in resp.jellies if any(p.username == username for p in j.participants)
-    ]
+    resp = await client.search("", username=username, page_size=page_size)
+    return resp.jellies
 
 
 async def by_topic(client: JellyClient, topic: str, page_size: int = 10) -> list[Jelly]:
     """Search for jellies matching a topic keyword."""
     resp = await client.search(topic, page_size=page_size)
+    return resp.jellies
+
+
+async def by_date_range(
+    client: JellyClient,
+    start_date: str,
+    end_date: str,
+    query: str = "",
+    page_size: int = 10,
+) -> list[Jelly]:
+    """Search for jellies within a date range.
+
+    Args:
+        client: Active JellyClient instance.
+        start_date: Start date (inclusive), e.g. "2026-01-01".
+        end_date: End date (inclusive), e.g. "2026-03-01".
+        query: Optional search term.
+        page_size: Results per page.
+
+    Returns:
+        List of jellies posted within the date range.
+    """
+    resp = await client.search(
+        query, page_size=page_size, start_date=start_date, end_date=end_date
+    )
+    return resp.jellies
+
+
+async def top_liked(
+    client: JellyClient,
+    query: str = "",
+    page_size: int = 10,
+) -> list[Jelly]:
+    """Search for jellies sorted by likes (descending).
+
+    Args:
+        client: Active JellyClient instance.
+        query: Optional search term.
+        page_size: Results per page.
+
+    Returns:
+        List of jellies sorted by most likes.
+    """
+    resp = await client.search(
+        query, page_size=page_size, sort_by="likes", ascending=False
+    )
     return resp.jellies
 
 
