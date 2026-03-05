@@ -129,11 +129,11 @@ class JellyDetail(BaseModel):
     tips_total: float = 0.0
     # Extended fields from API probing
     access: str | None = None
-    distinct_views: int = 0
-    anon_views: int = 0
+    distinct_views: int | None = 0
+    anon_views: int | None = 0
     price: float | None = None
-    pay_to_watch: bool = False
-    allow_preview: bool = True
+    pay_to_watch: bool | None = False
+    allow_preview: bool | None = True
     has_poll: bool = False
     has_event: bool = False
     created_at: datetime | None = None

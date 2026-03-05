@@ -174,8 +174,8 @@ class JellyClient:
         """
         if page < 1:
             raise ValueError(f"page must be >= 1, got {page}")
-        if page_size < 1 or page_size > 100:
-            raise ValueError(f"page_size must be 1-100, got {page_size}")
+        if page_size < 1 or page_size > 50:
+            raise ValueError(f"page_size must be 1-50, got {page_size}")
         params: dict[str, Any] = {
             "q": query,
             "page": page,

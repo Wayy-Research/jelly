@@ -149,6 +149,20 @@ class TestJellyDetail:
         assert detail.created_at is not None
         assert detail.deleted_at is None
 
+    def test_nullable_extended_fields(self) -> None:
+        """API can return None for distinct_views, anon_views, allow_preview."""
+        data = make_jelly_detail()
+        jelly = data["jelly"]
+        jelly["distinct_views"] = None
+        jelly["anon_views"] = None
+        jelly["allow_preview"] = None
+        jelly["pay_to_watch"] = None
+        detail = JellyDetail.model_validate(jelly)
+        assert detail.distinct_views is None
+        assert detail.anon_views is None
+        assert detail.allow_preview is None
+        assert detail.pay_to_watch is None
+
 
 class TestSearchResponse:
     def test_parse_response(self) -> None:
