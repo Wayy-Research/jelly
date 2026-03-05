@@ -19,9 +19,9 @@ class Participant(BaseModel):
 class VideoInfo(BaseModel):
     """Video metadata from a jelly detail response."""
 
-    original_duration: float = 0.0
+    original_duration: float | None = 0.0
     preview_timecode: float | None = None
-    hls_master: str = ""
+    hls_master: str | None = ""
 
 
 class TranscriptWord(BaseModel):
@@ -123,10 +123,10 @@ class JellyDetail(BaseModel):
     video: VideoInfo | None = None
     transcript_overlay: TranscriptOverlay | None = None
     # Engagement metrics (only available in detail, not search)
-    likes_count: int = 0
-    comments_count: int = 0
-    all_views: int = 0
-    tips_total: float = 0.0
+    likes_count: int | None = 0
+    comments_count: int | None = 0
+    all_views: int | None = 0
+    tips_total: float | None = 0.0
     # Extended fields from API probing
     access: str | None = None
     distinct_views: int | None = 0
@@ -134,8 +134,8 @@ class JellyDetail(BaseModel):
     price: float | None = None
     pay_to_watch: bool | None = False
     allow_preview: bool | None = True
-    has_poll: bool = False
-    has_event: bool = False
+    has_poll: bool | None = False
+    has_event: bool | None = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
     deleted_at: datetime | None = None
@@ -167,7 +167,9 @@ class JellyDetail(BaseModel):
     @property
     def duration_seconds(self) -> float:
         """Return video duration in seconds."""
-        return self.video.original_duration if self.video else 0.0
+        if self.video and self.video.original_duration is not None:
+            return self.video.original_duration
+        return 0.0
 
 
 class SearchResponse(BaseModel):
