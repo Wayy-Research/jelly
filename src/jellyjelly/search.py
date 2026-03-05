@@ -80,6 +80,9 @@ async def search_all_pages(
     query: str,
     max_pages: int = 5,
     page_size: int = 10,
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> list[Jelly]:
     """Paginate through search results up to max_pages.
 
@@ -88,6 +91,8 @@ async def search_all_pages(
         query: Search term.
         max_pages: Maximum number of pages to fetch.
         page_size: Results per page.
+        start_date: Filter jellies posted on or after this date.
+        end_date: Filter jellies posted on or before this date.
 
     Returns:
         Aggregated list of jellies across all pages.
@@ -96,7 +101,11 @@ async def search_all_pages(
 
     for page_num in range(1, max_pages + 1):
         resp: SearchResponse = await client.search(
-            query, page=page_num, page_size=page_size
+            query,
+            page=page_num,
+            page_size=page_size,
+            start_date=start_date,
+            end_date=end_date,
         )
         all_jellies.extend(resp.jellies)
 
